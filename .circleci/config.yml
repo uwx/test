@@ -1,0 +1,42 @@
+version: 2.1
+
+jobs:
+  deploy:
+    docker:
+      - image: cimg/node:22.9
+    resource_class: medium
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "86:3b:c9:a6:d1:b9:a8:dc:0e:00:db:99:8d:19:c4:3e"
+      - run:
+          name: Add known hosts
+          command: |
+            mkdir -p ~/.ssh
+            echo $GH_HOST >> ~/.ssh/known_hosts
+            echo $RPM_HOST >> ~/.ssh/known_hosts
+      - run:
+          name: Install NPM
+          command: |
+            sudo apt-get update && sudo apt-get install -y rsync npm
+      - run:
+          name: Clone WebVM
+          command: |
+            git clone --branch $CIRCLE_BRANCH --single-branch git@github.com:leaningtech/webvm.git
+      - run:
+          name: Build WebVM
+          command: |
+            cd webvm/
+            npm install
+            npm run build
+      - run:
+          name: Deploy webvm
+          command: |
+            rsync -avz -e "ssh -p ${SSH_PORT}" webvm/build/ leaningtech@${SSH_HOST}:/srv/web/webvm/
+
+workflows:
+  deploy:
+    when:
+      equal: [ << pipeline.trigger_source >>, "api" ]
+    jobs:
+      - deploy
